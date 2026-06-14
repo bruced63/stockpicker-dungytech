@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Screener — StockPicker{% endblock %}
+
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-search"></i> Stock Screener</h4>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form id="screenerForm" class="row g-3 align-items-end">
+            <div class="col-auto">
+                <label class="form-label">Max Price ($)</label>
+                <input type="number" id="maxPrice" class="form-control" value="{{ config.max_price }}" min="1" step="1">
+            </div>
+            <div class="col-auto">
+                <label class="form-label">Top N Results</label>
+                <input type="number" id="topN" class="form-control" value="15" min="1" max="50">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary" id="runBtn">
+                    <i class="bi bi-play-fill"></i> Run Screener
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Loading -->
+<div id="screenerLoading" class="text-center py-5 d-none">
+    <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;"></div>
+    <p class="text-muted">Scanning ~100 tickers... this may take 1-2 minutes.</p>
+    <div class="progress mx-auto" style="max-width: 400px;">
+        <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width: 100%"></div>
+    </div>
+</div>
+
+<!-- Results -->
+<div id="screenerResults" class="d-none">
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-trophy"></i> Top Scored Stocks
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Ticker</th>
+                            <th class="text-end">Price</th>
+                            <th>Score</th>
+                            <th class="text-end">RSI</th>
+                            <th class="d-none d-md-table-cell">Key Signal</th>
+                        </tr>
+                    </thead>
+                    <tbody id="screenerBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="screenerError" class="alert alert-danger d-none"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('screenerForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const maxPrice = document.getElementById('maxPrice').value;
+    const topN = document.getElementById('topN').value;
+
+    document.getElementById('screenerLoading').classList.remove('d-none');
+    document.getElementById('screenerResults').classList.add('d-none');
+    document.getElementById('screenerError').classList.add('d-none');
+    document.getElementById('runBtn').disabled = true;
+
+    fetch('/api/screener/run', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({max_price: parseFloat(maxPrice), top_n: parseInt(topN)})
+    }).then(r => r.json()).then(() => {
+        pollScreener();
+    });
+});
+
+function pollScreener() {
+    setTimeout(() => {
+        fetch('/api/screener/status').then(r => r.json()).then(data => {
+            if (data.status === 'running') {
+                pollScreener();
+            } else if (data.status === 'done') {
+                showScreenerResults(data.data);
+            } else if (data.status === 'error') {
+                document.getElementById('screenerError').textContent = data.error;
+                document.getElementById('screenerError').classList.remove('d-none');
+                document.getElementById('screenerLoading').classList.add('d-none');
+                document.getElementById('runBtn').disabled = false;
+            }
+        });
+    }, 3000);
+}
+
+function showScreenerResults(results) {
+    document.getElementById('screenerLoading').classList.add('d-none');
+    document.getElementById('screenerResults').classList.remove('d-none');
+    document.getElementById('runBtn').disabled = false;
+
+    const body = document.getElementById('screenerBody');
+    body.innerHTML = '';
+
+    results.forEach((r, i) => {
+        const scoreClass = r.score >= 70 ? 'bg-success' : r.score >= 50 ? 'bg-warning' : 'bg-danger';
+        const signal = r.signals && r.signals.length > 1 ? r.signals[1] : (r.signals ? r.signals[0] : '');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${i + 1}</td>
+            <td><strong class="text-primary">${r.ticker}</strong></td>
+            <td class="text-end">$${r.price.toFixed(2)}</td>
+            <td>
+                <div class="d-flex align-items-center gap-2">
+                    <div class="progress flex-grow-1" style="height: 20px; min-width: 60px;">
+                        <div class="progress-bar ${scoreClass}" style="width: ${r.score}%">${r.score}</div>
+                    </div>
+                </div>
+            </td>
+            <td class="text-end">${r.rsi !== null ? r.rsi.toFixed(1) : 'N/A'}</td>
+            <td class="d-none d-md-table-cell text-muted small">${signal}</td>
+        `;
+        body.appendChild(tr);
+    });
+}
+</script>
+{% endblock %}

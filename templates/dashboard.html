@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — StockPicker{% endblock %}
+
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-speedometer2"></i> Dashboard</h4>
+
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <div class="text-muted small">Portfolio Total</div>
+                <div class="fs-3 fw-bold text-primary">${{ "{:,.2f}".format(summary.portfolio_total) }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <div class="text-muted small">Holdings Value</div>
+                <div class="fs-3 fw-bold">${{ "{:,.2f}".format(summary.total_value) }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <div class="text-muted small">Cash Available</div>
+                <div class="fs-3 fw-bold text-info">${{ "{:,.2f}".format(summary.cash) }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <div class="text-muted small">Total P&L</div>
+                <div class="fs-3 fw-bold {% if summary.total_gain >= 0 %}text-success{% else %}text-danger{% endif %}">
+                    ${{ "{:+,.2f}".format(summary.total_gain) }}
+                    <small class="fs-6">({{ "{:+.1f}".format(summary.total_gain_pct) }}%)</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Holdings Table -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-briefcase"></i> Holdings ({{ summary.holdings|length }})</span>
+        <a href="/portfolio" class="btn btn-sm btn-outline-primary">Manage</a>
+    </div>
+    <div class="card-body p-0">
+        {% if summary.holdings %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Ticker</th>
+                        <th class="text-end">Shares</th>
+                        <th class="text-end">Avg Cost</th>
+                        <th class="text-end">Current</th>
+                        <th class="text-end">Value</th>
+                        <th class="text-end">Gain/Loss</th>
+                        <th class="d-none d-md-table-cell">Bought</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for h in summary.holdings %}
+                    <tr>
+                        <td><strong class="text-primary">{{ h.ticker }}</strong></td>
+                        <td class="text-end">{{ "%.2f"|format(h.shares) }}</td>
+                        <td class="text-end">${{ "%.2f"|format(h.buy_price) }}</td>
+                        <td class="text-end">
+                            ${{ "%.2f"|format(h.current_price) }}
+                            {% if h.stale %}<i class="bi bi-exclamation-triangle text-warning" title="Stale price"></i>{% endif %}
+                        </td>
+                        <td class="text-end">${{ "{:,.2f}".format(h.value) }}</td>
+                        <td class="text-end {% if h.gain >= 0 %}text-success{% else %}text-danger{% endif %}">
+                            ${{ "{:+,.2f}".format(h.gain) }}
+                            <small>({{ "{:+.1f}".format(h.gain_pct) }}%)</small>
+                        </td>
+                        <td class="d-none d-md-table-cell text-muted">{{ h.buy_date }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-inbox fs-1"></i>
+            <p class="mt-2">No holdings yet. <a href="/portfolio">Add your first position</a>.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Quick Links -->
+<div class="row g-3 mt-3">
+    <div class="col-md-4">
+        <a href="/screener" class="card text-decoration-none hover-card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-search fs-2 text-info"></i>
+                <div class="mt-2">Stock Screener</div>
+                <small class="text-muted">Scan {{ config.max_price|int }} tickers by technicals</small>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a href="/sentiment" class="card text-decoration-none hover-card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-newspaper fs-2 text-warning"></i>
+                <div class="mt-2">Sentiment Analysis</div>
+                <small class="text-muted">News sentiment for any ticker</small>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a href="/recommendations" class="card text-decoration-none hover-card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-lightbulb fs-2 text-success"></i>
+                <div class="mt-2">Recommendations</div>
+                <small class="text-muted">BUY / SELL / HOLD signals</small>
+            </div>
+        </a>
+    </div>
+</div>
+{% endblock %}

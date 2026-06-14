@@ -1,0 +1,51 @@
+/* StockPicker Web — Custom Styles */
+
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.container-fluid {
+    flex: 1;
+}
+
+/* Card hover effect for quick links */
+.hover-card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.hover-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* Progress bar in tables */
+.table .progress {
+    background-color: rgba(255,255,255,0.1);
+}
+
+/* Ensure table text doesn't wrap awkwardly on mobile */
+.table td, .table th {
+    white-space: nowrap;
+}
+.table td:first-child {
+    white-space: normal;
+}
+
+/* Navbar brand */
+.navbar-brand i {
+    font-size: 1.2em;
+}
+
+/* Flash messages */
+.alert {
+    border-radius: 8px;
+}
+
+/* Light theme adjustments */
+[data-bs-theme="light"] .table .progress {
+    background-color: rgba(0,0,0,0.08);
+}
+[data-bs-theme="light"] .hover-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}

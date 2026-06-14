@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Recommendations — StockPicker{% endblock %}
+
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-lightbulb"></i> Recommendations</h4>
+
+<div class="card mb-4">
+    <div class="card-body d-flex align-items-center gap-3">
+        <button class="btn btn-primary" id="runBtn" onclick="startRecommendations()">
+            <i class="bi bi-play-fill"></i> Generate Recommendations
+        </button>
+        <small class="text-muted">
+            Config: Stop-loss at {{ config.stop_loss_pct }}% | Max price ${{ config.max_price }}
+        </small>
+    </div>
+</div>
+
+<div id="recLoading" class="text-center py-5 d-none">
+    <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;"></div>
+    <p class="text-muted">Analyzing holdings and scanning for buy candidates...<br>This may take several minutes.</p>
+    <div class="progress mx-auto" style="max-width: 400px;">
+        <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning" style="width: 100%"></div>
+    </div>
+</div>
+
+<div id="recResults" class="d-none">
+    <!-- SELL Signals -->
+    <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-arrow-down-circle text-danger"></i> Holdings Review (SELL / HOLD)</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Ticker</th>
+                            <th class="text-end">Cost</th>
+                            <th class="text-end">Current</th>
+                            <th class="text-end">Change</th>
+                            <th class="text-end">RSI</th>
+                            <th class="text-end">Sentiment</th>
+                            <th>Action</th>
+                            <th class="d-none d-md-table-cell">Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sellBody"></tbody>
+                </table>
+            </div>
+            <div id="sellEmpty" class="text-center text-muted py-4 d-none">No holdings to review.</div>
+        </div>
+    </div>
+
+    <!-- BUY Candidates -->
+    <div class="card">
+        <div class="card-header"><i class="bi bi-arrow-up-circle text-success"></i> Buy Candidates (BUY / WATCH)</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Ticker</th>
+                            <th class="text-end">Price</th>
+                            <th>Score</th>
+                            <th class="text-end">Sentiment</th>
+                            <th>Action</th>
+                            <th class="d-none d-md-table-cell">Key Signal</th>
+                        </tr>
+                    </thead>
+                    <tbody id="buyBody"></tbody>
+                </table>
+            </div>
+            <div id="buyEmpty" class="text-center text-muted py-4 d-none">No strong candidates found.</div>
+        </div>
+    </div>
+</div>
+
+<div id="recError" class="alert alert-danger d-none"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function startRecommendations() {
+    document.getElementById('recLoading').classList.remove('d-none');
+    document.getElementById('recResults').classList.add('d-none');
+    document.getElementById('recError').classList.add('d-none');
+    document.getElementById('runBtn').disabled = true;
+
+    fetch('/api/recommendations/run', {method: 'POST'}).then(r => r.json()).then(() => {
+        pollRec();
+    });
+}
+
+function pollRec() {
+    setTimeout(() => {
+        fetch('/api/recommendations/status').then(r => r.json()).then(data => {
+            if (data.status === 'running') {
+                pollRec();
+            } else if (data.status === 'done') {
+                showRecResults(data.data);
+            } else if (data.status === 'error') {
+                document.getElementById('recError').textContent = data.error;
+                document.getElementById('recError').classList.remove('d-none');
+                document.getElementById('recLoading').classList.add('d-none');
+                document.getElementById('runBtn').disabled = false;
+            }
+        });
+    }, 3000);
+}
+
+function showRecResults(data) {
+    document.getElementById('recLoading').classList.add('d-none');
+    document.getElementById('recResults').classList.remove('d-none');
+    document.getElementById('runBtn').disabled = false;
+
+    // Sell signals
+    const sellBody = document.getElementById('sellBody');
+    sellBody.innerHTML = '';
+    if (data.sell_signals.length === 0) {
+        document.getElementById('sellEmpty').classList.remove('d-none');
+    } else {
+        document.getElementById('sellEmpty').classList.add('d-none');
+        data.sell_signals.forEach(s => {
+            const changeCls = s.change_pct >= 0 ? 'text-success' : 'text-danger';
+            const actionBadge = s.action === 'SELL' ? 'bg-danger' : 'bg-warning';
+            const sentCls = s.sentiment > 0.05 ? 'text-success' : s.sentiment < -0.05 ? 'text-danger' : 'text-warning';
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong class="text-primary">${s.ticker}</strong></td>
+                <td class="text-end">$${s.buy_price.toFixed(2)}</td>
+                <td class="text-end">$${s.current_price.toFixed(2)}</td>
+                <td class="text-end ${changeCls}">${s.change_pct >= 0 ? '+' : ''}${s.change_pct.toFixed(1)}%</td>
+                <td class="text-end">${s.rsi !== null ? s.rsi.toFixed(0) : 'N/A'}</td>
+                <td class="text-end ${sentCls}">${s.sentiment >= 0 ? '+' : ''}${s.sentiment.toFixed(2)}</td>
+                <td><span class="badge ${actionBadge}">${s.action}</span></td>
+                <td class="d-none d-md-table-cell text-muted small">${s.reasons.join('; ')}</td>
+            `;
+            sellBody.appendChild(tr);
+        });
+    }
+
+    // Buy candidates
+    const buyBody = document.getElementById('buyBody');
+    buyBody.innerHTML = '';
+    if (data.buy_candidates.length === 0) {
+        document.getElementById('buyEmpty').classList.remove('d-none');
+    } else {
+        document.getElementById('buyEmpty').classList.add('d-none');
+        data.buy_candidates.forEach(b => {
+            const scoreClass = b.score >= 70 ? 'bg-success' : b.score >= 50 ? 'bg-warning' : 'bg-danger';
+            const actionBadge = b.action === 'BUY' ? 'bg-success' : 'bg-info';
+            const sentCls = b.sentiment > 0.05 ? 'text-success' : b.sentiment < -0.05 ? 'text-danger' : 'text-warning';
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong class="text-primary">${b.ticker}</strong></td>
+                <td class="text-end">$${b.price.toFixed(2)}</td>
+                <td>
+                    <div class="progress" style="height: 20px; min-width: 60px;">
+                        <div class="progress-bar ${scoreClass}" style="width: ${b.score}%">${b.score}</div>
+                    </div>
+                </td>
+                <td class="text-end ${sentCls}">${b.sentiment >= 0 ? '+' : ''}${b.sentiment.toFixed(2)}</td>
+                <td><span class="badge ${actionBadge}">${b.action}</span></td>
+                <td class="d-none d-md-table-cell text-muted small">${b.signal}</td>
+            `;
+            buyBody.appendChild(tr);
+        });
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Portfolio — StockPicker{% endblock %}
+
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-briefcase"></i> Portfolio Management</h4>
+
+<div class="row g-4">
+    <!-- Add Position Form -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-plus-circle"></i> Add Position</div>
+            <div class="card-body">
+                <form method="POST" action="/portfolio/add">
+                    <div class="mb-3">
+                        <label class="form-label">Ticker</label>
+                        <input type="text" name="ticker" class="form-control" placeholder="AAPL" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Shares</label>
+                        <input type="number" name="shares" class="form-control" step="0.01" min="0.01" placeholder="10" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Buy Price ($)</label>
+                        <input type="number" name="price" class="form-control" step="0.01" min="0.01" placeholder="150.00" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Date <small class="text-muted">(optional)</small></label>
+                        <input type="date" name="buy_date" class="form-control">
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="bi bi-cart-plus"></i> Buy
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Cash Management -->
+        <div class="card mt-3">
+            <div class="card-header"><i class="bi bi-cash-stack"></i> Cash Balance</div>
+            <div class="card-body">
+                <div class="fs-4 fw-bold text-info mb-3">${{ "{:,.2f}".format(cash) }}</div>
+                <form method="POST" action="/portfolio/set-cash" class="d-flex gap-2">
+                    <input type="number" name="amount" class="form-control" step="0.01" min="0" placeholder="New amount">
+                    <button type="submit" class="btn btn-outline-info">Set</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Holdings -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-list-ul"></i> Current Holdings
+            </div>
+            <div class="card-body p-0">
+                {% if summary.holdings %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Ticker</th>
+                                <th class="text-end">Shares</th>
+                                <th class="text-end">Avg Cost</th>
+                                <th class="text-end">Current</th>
+                                <th class="text-end">Value</th>
+                                <th class="text-end">P&L</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for h in summary.holdings %}
+                            <tr>
+                                <td><strong class="text-primary">{{ h.ticker }}</strong></td>
+                                <td class="text-end">{{ "%.2f"|format(h.shares) }}</td>
+                                <td class="text-end">${{ "%.2f"|format(h.buy_price) }}</td>
+                                <td class="text-end">${{ "%.2f"|format(h.current_price) }}</td>
+                                <td class="text-end">${{ "{:,.2f}".format(h.value) }}</td>
+                                <td class="text-end {% if h.gain >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                    ${{ "{:+,.2f}".format(h.gain) }}
+                                    <small>({{ "{:+.1f}".format(h.gain_pct) }}%)</small>
+                                </td>
+                                <td>
+                                    <form method="POST" action="/portfolio/sell" class="d-inline"
+                                          onsubmit="return confirm('Sell all {{ h.ticker }} shares?')">
+                                        <input type="hidden" name="ticker" value="{{ h.ticker }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="bi bi-x-circle"></i> Sell
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="table-group-divider">
+                            <tr class="fw-bold">
+                                <td colspan="4">Total</td>
+                                <td class="text-end">${{ "{:,.2f}".format(summary.total_value) }}</td>
+                                <td class="text-end {% if summary.total_gain >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                    ${{ "{:+,.2f}".format(summary.total_gain) }}
+                                    <small>({{ "{:+.1f}".format(summary.total_gain_pct) }}%)</small>
+                                </td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-inbox fs-1"></i>
+                    <p class="mt-2">No holdings. Use the form to add your first position.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

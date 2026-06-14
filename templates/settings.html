@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Settings — StockPicker{% endblock %}
+
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-gear"></i> Settings</h4>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">Configuration</div>
+            <div class="card-body">
+                <form method="POST" action="/settings/save">
+                    <div class="mb-3">
+                        <label class="form-label">Max Stock Price ($)</label>
+                        <input type="number" name="max_price" class="form-control" value="{{ config.max_price }}" step="1" min="1">
+                        <div class="form-text">Screener and recommendations will only consider stocks below this price.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Stop-Loss Percentage (%)</label>
+                        <input type="number" name="stop_loss_pct" class="form-control" value="{{ config.stop_loss_pct }}" step="0.5" min="1" max="50">
+                        <div class="form-text">Trigger a SELL recommendation when a holding drops this much from buy price.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Budget ($)</label>
+                        <input type="number" name="budget" class="form-control" value="{{ config.budget }}" step="100" min="0">
+                        <div class="form-text">Your target investment budget (informational).</div>
+                    </div>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-circle"></i> Save Settings
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6 mt-3 mt-lg-0">
+        <div class="card">
+            <div class="card-header">About</div>
+            <div class="card-body">
+                <p><strong>StockPicker Web</strong> is a paper trading and stock analysis tool.</p>
+                <ul class="list-unstyled">
+                    <li><i class="bi bi-check text-success"></i> Technical screening (RSI, MA crossover, volume, 52-wk position)</li>
+                    <li><i class="bi bi-check text-success"></i> News sentiment analysis (VADER)</li>
+                    <li><i class="bi bi-check text-success"></i> Buy/Sell/Hold recommendations</li>
+                    <li><i class="bi bi-check text-success"></i> Portfolio tracking with P&L</li>
+                </ul>
+                <p class="text-muted small mb-0">
+                    Data: Yahoo Finance via yfinance<br>
+                    Sentiment: VADER (Valence Aware Dictionary and sEntiment Reasoner)<br>
+                    This is for educational/paper trading purposes only.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

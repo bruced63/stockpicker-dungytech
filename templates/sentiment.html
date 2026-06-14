@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Sentiment — StockPicker{% endblock %}
+
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-newspaper"></i> Sentiment Analysis</h4>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form id="sentimentForm" class="row g-3 align-items-end">
+            <div class="col-auto">
+                <label class="form-label">Ticker Symbol</label>
+                <input type="text" id="sentimentTicker" class="form-control" placeholder="AAPL" required style="text-transform: uppercase;">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary" id="sentimentBtn">
+                    <i class="bi bi-search"></i> Analyze
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="sentimentLoading" class="text-center py-5 d-none">
+    <div class="spinner-border text-primary" role="status"></div>
+    <p class="text-muted mt-2">Fetching news and analyzing sentiment...</p>
+</div>
+
+<div id="sentimentResults" class="d-none">
+    <!-- Summary Card -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card text-center h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Overall Sentiment</div>
+                    <div class="fs-3 fw-bold" id="overallLabel">—</div>
+                    <div class="fs-5" id="overallScore">—</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-2">Breakdown</div>
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="fs-4 text-success fw-bold" id="posCount">0</div>
+                            <small class="text-muted">Positive</small>
+                        </div>
+                        <div class="col-4">
+                            <div class="fs-4 text-danger fw-bold" id="negCount">0</div>
+                            <small class="text-muted">Negative</small>
+                        </div>
+                        <div class="col-4">
+                            <div class="fs-4 text-warning fw-bold" id="neuCount">0</div>
+                            <small class="text-muted">Neutral</small>
+                        </div>
+                    </div>
+                    <div class="progress mt-3" style="height: 8px;" id="sentimentBar"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Headlines Table -->
+    <div class="card">
+        <div class="card-header"><i class="bi bi-list-ul"></i> Headlines</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Headline</th>
+                            <th class="text-end">Score</th>
+                            <th>Sentiment</th>
+                        </tr>
+                    </thead>
+                    <tbody id="headlinesBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="sentimentError" class="alert alert-warning d-none"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('sentimentForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const ticker = document.getElementById('sentimentTicker').value.trim().toUpperCase();
+    if (!ticker) return;
+
+    document.getElementById('sentimentLoading').classList.remove('d-none');
+    document.getElementById('sentimentResults').classList.add('d-none');
+    document.getElementById('sentimentError').classList.add('d-none');
+    document.getElementById('sentimentBtn').disabled = true;
+
+    fetch('/api/sentiment', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ticker})
+    }).then(r => r.json()).then(data => {
+        document.getElementById('sentimentLoading').classList.add('d-none');
+        document.getElementById('sentimentBtn').disabled = false;
+
+        if (data.error) {
+            document.getElementById('sentimentError').textContent = data.error;
+            document.getElementById('sentimentError').classList.remove('d-none');
+            return;
+        }
+
+        if (!data.headlines || data.headlines.length === 0) {
+            document.getElementById('sentimentError').textContent = `No news found for ${data.ticker}.`;
+            document.getElementById('sentimentError').classList.remove('d-none');
+            return;
+        }
+
+        document.getElementById('sentimentResults').classList.remove('d-none');
+
+        // Summary
+        const s = data.summary;
+        const labelEl = document.getElementById('overallLabel');
+        labelEl.textContent = s.overall;
+        labelEl.className = 'fs-3 fw-bold ' + (s.overall === 'POSITIVE' ? 'text-success' : s.overall === 'NEGATIVE' ? 'text-danger' : 'text-warning');
+
+        document.getElementById('overallScore').textContent = `Score: ${s.avg_score >= 0 ? '+' : ''}${s.avg_score.toFixed(3)}`;
+        document.getElementById('posCount').textContent = s.positive;
+        document.getElementById('negCount').textContent = s.negative;
+        document.getElementById('neuCount').textContent = s.neutral;
+
+        const total = s.total || 1;
+        document.getElementById('sentimentBar').innerHTML = `
+            <div class="progress-bar bg-success" style="width: ${(s.positive/total)*100}%"></div>
+            <div class="progress-bar bg-warning" style="width: ${(s.neutral/total)*100}%"></div>
+            <div class="progress-bar bg-danger" style="width: ${(s.negative/total)*100}%"></div>
+        `;
+
+        // Headlines
+        const body = document.getElementById('headlinesBody');
+        body.innerHTML = '';
+        data.headlines.forEach(h => {
+            const cls = h.label === 'POSITIVE' ? 'text-success' : h.label === 'NEGATIVE' ? 'text-danger' : 'text-warning';
+            const badge = h.label === 'POSITIVE' ? 'bg-success' : h.label === 'NEGATIVE' ? 'bg-danger' : 'bg-warning';
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${h.text}</td>
+                <td class="text-end ${cls}">${h.score >= 0 ? '+' : ''}${h.score.toFixed(3)}</td>
+                <td><span class="badge ${badge}">${h.label}</span></td>
+            `;
+            body.appendChild(tr);
+        });
+    }).catch(err => {
+        document.getElementById('sentimentLoading').classList.add('d-none');
+        document.getElementById('sentimentBtn').disabled = false;
+        document.getElementById('sentimentError').textContent = 'Failed to fetch sentiment data.';
+        document.getElementById('sentimentError').classList.remove('d-none');
+    });
+});
+</script>
+{% endblock %}
