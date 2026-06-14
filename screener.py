@@ -17,8 +17,8 @@ NASDAQ100_SAMPLE = [
     "NVDA", "TSLA", "ADBE", "NFLX", "PYPL", "INTC", "CMCSA", "PEP", "TMUS",
     "AMGN", "GILD", "REGN", "BIIB", "VRTX", "ILMN", "IDXX", "ALGN", "DXCM",
     "MRNA", "TEAM", "ZM", "DOCU", "OKTA", "CRWD", "SNOW", "DDOG", "NET",
-    "ABNB", "DASH", "RBLX", "UBER", "LYFT", "PINS", "SNAP", "TWTR", "SQ",
-    "ROKU", "SPOT", "NUAN", "BIDU", "JD", "PDD", "BABA", "NTES"
+    "ABNB", "DASH", "RBLX", "UBER", "LYFT", "PINS", "SNAP",
+    "ROKU", "SPOT", "BIDU", "JD", "PDD", "BABA", "NTES"
 ]
 
 ALL_TICKERS = list(set(SP500_SAMPLE + NASDAQ100_SAMPLE))
