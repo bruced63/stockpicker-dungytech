@@ -130,7 +130,10 @@ function showRecResults(data) {
                 <td class="text-end ${changeCls}">${s.change_pct >= 0 ? '+' : ''}${s.change_pct.toFixed(1)}%</td>
                 <td class="text-end">${s.rsi !== null ? s.rsi.toFixed(0) : 'N/A'}</td>
                 <td class="text-end ${sentCls}">${s.sentiment >= 0 ? '+' : ''}${s.sentiment.toFixed(2)}</td>
-                <td><span class="badge ${actionBadge}">${s.action}</span></td>
+                <td>${s.action === 'SELL'
+                    ? `<a href="/portfolio?sell=${s.ticker}" class="badge bg-danger text-decoration-none">SELL</a>`
+                    : `<span class="badge bg-warning">${s.action}</span>`
+                }</td>
                 <td class="d-none d-md-table-cell text-muted small">${s.reasons.join('; ')}</td>
             `;
             sellBody.appendChild(tr);
@@ -158,7 +161,10 @@ function showRecResults(data) {
                     </div>
                 </td>
                 <td class="text-end ${sentCls}">${b.sentiment >= 0 ? '+' : ''}${b.sentiment.toFixed(2)}</td>
-                <td><span class="badge ${actionBadge}">${b.action}</span></td>
+                <td>${b.action === 'BUY'
+                    ? `<a href="/portfolio?ticker=${b.ticker}&price=${b.price.toFixed(2)}" class="badge bg-success text-decoration-none">BUY</a>`
+                    : `<span class="badge bg-info">${b.action}</span>`
+                }</td>
                 <td class="d-none d-md-table-cell text-muted small">${b.signal}</td>
             `;
             buyBody.appendChild(tr);

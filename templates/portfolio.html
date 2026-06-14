@@ -116,3 +116,44 @@
     </div>
 </div>
 {% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const params = new URLSearchParams(window.location.search);
+
+    // Pre-fill buy form when arriving from a BUY recommendation
+    const ticker = params.get('ticker');
+    const price  = params.get('price');
+    if (ticker) {
+        const tickerInput = document.querySelector('input[name="ticker"]');
+        const priceInput  = document.querySelector('input[name="price"]');
+        if (tickerInput) tickerInput.value = ticker.toUpperCase();
+        if (priceInput && price) priceInput.value = price;
+        tickerInput?.closest('.card')?.scrollIntoView({behavior: 'smooth', block: 'start'});
+        setTimeout(() => {
+            const shares = document.querySelector('input[name="shares"]');
+            (shares || tickerInput)?.focus();
+        }, 400);
+    }
+
+    // Highlight the sell row when arriving from a SELL recommendation
+    const sellTicker = params.get('sell');
+    if (sellTicker) {
+        const rows = document.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            const cell = row.querySelector('td strong');
+            if (cell && cell.textContent.trim() === sellTicker.toUpperCase()) {
+                row.classList.add('table-danger');
+                row.scrollIntoView({behavior: 'smooth', block: 'center'});
+                let count = 0;
+                const pulse = setInterval(() => {
+                    row.style.opacity = count % 2 === 0 ? '0.4' : '1';
+                    if (++count >= 6) { clearInterval(pulse); row.style.opacity = '1'; }
+                }, 300);
+            }
+        });
+    }
+})();
+</script>
+{% endblock %}
