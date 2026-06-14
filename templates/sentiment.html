@@ -141,13 +141,21 @@ document.getElementById('sentimentForm').addEventListener('submit', function(e) 
         body.innerHTML = '';
         data.headlines.forEach(h => {
             const cls = h.label === 'POSITIVE' ? 'text-success' : h.label === 'NEGATIVE' ? 'text-danger' : 'text-warning';
-            const badge = h.label === 'POSITIVE' ? 'bg-success' : h.label === 'NEGATIVE' ? 'bg-danger' : 'bg-warning';
+            const badgeCls = h.label === 'POSITIVE' ? 'bg-success' : h.label === 'NEGATIVE' ? 'bg-danger' : 'bg-warning';
             const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${h.text}</td>
-                <td class="text-end ${cls}">${h.score >= 0 ? '+' : ''}${h.score.toFixed(3)}</td>
-                <td><span class="badge ${badge}">${h.label}</span></td>
-            `;
+            const tdText = document.createElement('td');
+            tdText.textContent = h.text;  // textContent escapes HTML — safe for external data
+            const tdScore = document.createElement('td');
+            tdScore.className = `text-end ${cls}`;
+            tdScore.textContent = (h.score >= 0 ? '+' : '') + h.score.toFixed(3);
+            const tdBadge = document.createElement('td');
+            const span = document.createElement('span');
+            span.className = `badge ${badgeCls}`;
+            span.textContent = h.label;
+            tdBadge.appendChild(span);
+            tr.appendChild(tdText);
+            tr.appendChild(tdScore);
+            tr.appendChild(tdBadge);
             body.appendChild(tr);
         });
     }).catch(err => {

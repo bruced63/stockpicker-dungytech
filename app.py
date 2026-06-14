@@ -2,17 +2,32 @@
 
 from flask import (Flask, render_template, request, jsonify,
                    redirect, url_for, flash, session, g)
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
+from urllib.parse import urlparse
 import json
 import os
 import threading
 
 import auth
 import portfolio as pf
+from flask_wtf.csrf import CSRFProtect, CSRFError
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SP_SECRET_KEY", "change-me-in-production-sp2026")
+
+_secret = os.environ.get("SP_SECRET_KEY")
+if not _secret:
+    raise RuntimeError(
+        "SP_SECRET_KEY environment variable is not set. "
+        "Generate one with: python3 -c \"import secrets; print(secrets.token_hex(32))\""
+    )
+app.secret_key = _secret
+app.permanent_session_lifetime = timedelta(hours=12)
+
+csrf = CSRFProtect(app)
+limiter = Limiter(get_remote_address, app=app, default_limits=[])
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(DIR, "config.json")
@@ -37,6 +52,13 @@ def load_config():
 def save_config(config):
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=2)
+
+
+def _is_safe_redirect(url):
+    if not url:
+        return False
+    parsed = urlparse(url)
+    return not parsed.netloc and not parsed.scheme and url.startswith('/')
 
 
 @app.context_processor
@@ -75,9 +97,16 @@ def admin_required(f):
     return decorated
 
 
+@app.errorhandler(CSRFError)
+def csrf_error(e):
+    flash("Your session has expired or the request was invalid. Please try again.", "danger")
+    return redirect(request.referrer or url_for("dashboard"))
+
+
 # ── Auth routes ───────────────────────────────────────────────────────────────
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute", methods=["POST"])
 def login():
     if g.username:
         return redirect(url_for("dashboard"))
@@ -90,7 +119,9 @@ def login():
             session.permanent = True
             session["username"] = username
             session["role"] = u["role"]
-            next_url = request.args.get("next") or url_for("dashboard")
+            next_url = request.args.get("next", "")
+            if not _is_safe_redirect(next_url):
+                next_url = url_for("dashboard")
             return redirect(next_url)
         error = "Invalid username or password."
     return render_template("login.html", error=error)
@@ -291,6 +322,7 @@ def screener_page():
     return render_template("screener.html", config=load_config())
 
 
+@csrf.exempt
 @app.route("/api/screener/run", methods=["POST"])
 @login_required
 def screener_run():
@@ -333,6 +365,7 @@ def sentiment_page():
     return render_template("sentiment.html")
 
 
+@csrf.exempt
 @app.route("/api/sentiment", methods=["POST"])
 @login_required
 def sentiment_api():
@@ -355,6 +388,7 @@ def recommendations_page():
     return render_template("recommendations.html", config=load_config())
 
 
+@csrf.exempt
 @app.route("/api/recommendations/run", methods=["POST"])
 @login_required
 def recommendations_run():
@@ -386,7 +420,7 @@ def recommendations_status():
         return jsonify(recommend_results.get(username, {"status": "idle", "data": None, "error": None}))
 
 
-# ── Settings ──────────────────────────────────────────────────────────────────
+# ── Settings (admin-only — global config affects all users) ───────────────────
 
 @app.route("/settings")
 @login_required
@@ -395,7 +429,7 @@ def settings_page():
 
 
 @app.route("/settings/save", methods=["POST"])
-@login_required
+@admin_required
 def settings_save():
     try:
         config = {

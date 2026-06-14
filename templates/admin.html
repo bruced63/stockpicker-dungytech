@@ -58,6 +58,7 @@
                                 <!-- Toggle role (not self) -->
                                 {% if u.username != session_user %}
                                 <form method="POST" action="/admin/set-role" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="hidden" name="username" value="{{ u.username }}">
                                     <input type="hidden" name="role" value="{{ 'user' if u.role == 'admin' else 'admin' }}">
                                     <button type="submit" class="btn btn-sm btn-outline-info"
@@ -68,6 +69,7 @@
                                 <!-- Delete -->
                                 <form method="POST" action="/admin/delete-user" class="d-inline"
                                       onsubmit="return confirm('Delete user {{ u.username }}? This cannot be undone.')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="hidden" name="username" value="{{ u.username }}">
                                     <button type="submit" class="btn btn-sm btn-outline-danger">
                                         <i class="bi bi-trash"></i>
@@ -89,6 +91,7 @@
     <div class="card-header"><i class="bi bi-person-plus"></i> Add User</div>
     <div class="card-body">
         <form method="POST" action="/admin/add-user">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="row g-3">
                 <div class="col-md-3">
                     <label class="form-label">Username <span class="text-danger">*</span></label>
@@ -131,6 +134,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="/admin/reset-password">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
                     <input type="hidden" name="username" id="resetUsername">
                     <p class="text-muted mb-3" style="font-size:13px">

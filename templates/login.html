@@ -33,6 +33,7 @@
     {% endif %}
 
     <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="mb-3">
             <label class="form-label" style="font-size:13px;color:#8b949e">Username</label>
             <input type="text" name="username" class="form-control" required autofocus autocomplete="username">

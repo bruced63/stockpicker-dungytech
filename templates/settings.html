@@ -10,6 +10,7 @@
             <div class="card-header">Configuration</div>
             <div class="card-body">
                 <form method="POST" action="/settings/save">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label class="form-label">Max Stock Price ($)</label>
                         <input type="number" name="max_price" class="form-control" value="{{ config.max_price }}" step="1" min="1">
