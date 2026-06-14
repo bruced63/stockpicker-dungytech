@@ -1,34 +1,38 @@
-"""
-portfolio.py — Portfolio management for StockPicker Web
-"""
+# portfolio.py — Per-user portfolio management for StockPicker
 
 import json
 import os
 from datetime import date
 import yfinance as yf
 
-PORTFOLIO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "portfolio.json")
+DIR = os.path.dirname(os.path.abspath(__file__))
+PORTFOLIOS_DIR = os.path.join(DIR, "portfolios")
 
 
-def load_portfolio():
-    if not os.path.exists(PORTFOLIO_FILE):
+def get_portfolio_file(username="default"):
+    os.makedirs(PORTFOLIOS_DIR, exist_ok=True)
+    return os.path.join(PORTFOLIOS_DIR, f"portfolio_{username}.json")
+
+
+def load_portfolio(username="default"):
+    pfile = get_portfolio_file(username)
+    if not os.path.exists(pfile):
         return {"holdings": [], "cash": 1000.0}
-    with open(PORTFOLIO_FILE, "r") as f:
+    with open(pfile) as f:
         data = json.load(f)
     if "cash" not in data:
         data["cash"] = 1000.0
     return data
 
 
-def save_portfolio(data):
-    with open(PORTFOLIO_FILE, "w") as f:
+def save_portfolio(data, username="default"):
+    with open(get_portfolio_file(username), "w") as f:
         json.dump(data, f, indent=2)
 
 
 def get_current_price(ticker):
     try:
-        t = yf.Ticker(ticker.upper())
-        hist = t.history(period="2d")
+        hist = yf.Ticker(ticker.upper()).history(period="2d")
         if not hist.empty:
             return float(hist['Close'].iloc[-1])
     except Exception:
@@ -36,14 +40,13 @@ def get_current_price(ticker):
     return None
 
 
-def portfolio_add(ticker, shares, buy_price, buy_date=None):
-    """Add a position. Returns (success: bool, message: str)."""
+def portfolio_add(ticker, shares, buy_price, buy_date=None, username="default"):
     ticker = ticker.upper()
     shares = float(shares)
     buy_price = float(buy_price)
     buy_date = buy_date or str(date.today())
 
-    data = load_portfolio()
+    data = load_portfolio(username)
     cost = shares * buy_price
 
     if cost > data["cash"]:
@@ -57,31 +60,24 @@ def portfolio_add(ticker, shares, buy_price, buy_date=None):
             h["buy_price"] = (old_cost + new_cost) / h["shares"]
             h["buy_date"] = buy_date
             data["cash"] -= cost
-            save_portfolio(data)
-            return True, f"Added {shares} more shares of {ticker} @ ${buy_price:.2f}. Total: {h['shares']} shares, Avg cost: ${h['buy_price']:.2f}. Cash: ${data['cash']:.2f}"
+            save_portfolio(data, username)
+            return True, f"Added {shares} more shares of {ticker} @ ${buy_price:.2f}. Avg cost: ${h['buy_price']:.2f}. Cash: ${data['cash']:.2f}"
 
     data["holdings"].append({
         "ticker": ticker,
         "shares": shares,
         "buy_price": buy_price,
-        "buy_date": buy_date
+        "buy_date": buy_date,
     })
     data["cash"] -= cost
-    save_portfolio(data)
+    save_portfolio(data, username)
     return True, f"Added {shares} shares of {ticker} @ ${buy_price:.2f} (Cost: ${cost:.2f}). Cash: ${data['cash']:.2f}"
 
 
-def portfolio_remove(ticker):
-    """Remove/sell a position. Returns (success, message)."""
+def portfolio_remove(ticker, username="default"):
     ticker = ticker.upper()
-    data = load_portfolio()
-
-    removed = None
-    for h in data["holdings"]:
-        if h["ticker"] == ticker:
-            removed = h
-            break
-
+    data = load_portfolio(username)
+    removed = next((h for h in data["holdings"] if h["ticker"] == ticker), None)
     if not removed:
         return False, f"No position found for {ticker}"
 
@@ -89,17 +85,22 @@ def portfolio_remove(ticker):
     proceeds = removed["shares"] * current_price
     data["cash"] += proceeds
     data["holdings"] = [h for h in data["holdings"] if h["ticker"] != ticker]
-    save_portfolio(data)
+    save_portfolio(data, username)
 
     gain = (current_price - removed["buy_price"]) * removed["shares"]
     gain_pct = ((current_price / removed["buy_price"]) - 1) * 100
-
     return True, f"Sold {removed['shares']} shares of {ticker} @ ${current_price:.2f}. Proceeds: ${proceeds:.2f}, P&L: ${gain:+.2f} ({gain_pct:+.1f}%). Cash: ${data['cash']:.2f}"
 
 
-def portfolio_summary():
-    """Get portfolio with current prices. Returns dict with holdings details and summary."""
-    data = load_portfolio()
+def set_cash(amount, username="default"):
+    data = load_portfolio(username)
+    data["cash"] = float(amount)
+    save_portfolio(data, username)
+    return True, f"Cash set to ${amount:.2f}"
+
+
+def portfolio_summary(username="default"):
+    data = load_portfolio(username)
     holdings = data["holdings"]
     cash = data["cash"]
 
@@ -146,11 +147,3 @@ def portfolio_summary():
         "total_gain_pct": round(total_gain_pct, 1),
         "portfolio_total": round(total_value + cash, 2),
     }
-
-
-def set_cash(amount):
-    """Set the cash balance directly."""
-    data = load_portfolio()
-    data["cash"] = float(amount)
-    save_portfolio(data)
-    return True, f"Cash set to ${amount:.2f}"

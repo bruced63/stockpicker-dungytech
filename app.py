@@ -1,26 +1,29 @@
-#!/usr/bin/env python3
-# StockPicker — stocks.dungytech.com
+# app.py — StockPicker · stocks.dungytech.com · Dungy Tech Solutions, LLC
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from flask import (Flask, render_template, request, jsonify,
+                   redirect, url_for, flash, session, g)
 from datetime import datetime
+from functools import wraps
 import json
 import os
 import threading
 
-app = Flask(__name__)
-app.secret_key = os.environ.get("SP_SECRET_KEY", os.urandom(24))
+import auth
+import portfolio as pf
 
-@app.context_processor
-def inject_year():
-    return {"current_year": datetime.utcnow().year}
+app = Flask(__name__)
+app.secret_key = os.environ.get("SP_SECRET_KEY", "change-me-in-production-sp2026")
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(DIR, "config.json")
-PORTFOLIO_FILE = os.path.join(DIR, "portfolio.json")
 
-os.environ["SP_CONFIG_FILE"] = CONFIG_FILE
-os.environ["SP_PORTFOLIO_FILE"] = PORTFOLIO_FILE
 
+# ── Bootstrap ────────────────────────────────────────────────────────────────
+
+auth.init_default_admin()
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def load_config():
     defaults = {"max_price": 100, "stop_loss_pct": 8, "budget": 1000}
@@ -36,27 +39,203 @@ def save_config(config):
         json.dump(config, f, indent=2)
 
 
-# ── Routes ──────────────────────────────────────────────────────────────────
+@app.context_processor
+def inject_globals():
+    return {
+        "current_year": datetime.utcnow().year,
+        "session_user": session.get("username"),
+        "session_role": session.get("role"),
+    }
+
+
+@app.before_request
+def load_user():
+    g.username = session.get("username")
+    g.role = session.get("role")
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not g.username:
+            return redirect(url_for("login", next=request.path))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not g.username:
+            return redirect(url_for("login", next=request.path))
+        if g.role != "admin":
+            flash("Admin access required.", "danger")
+            return redirect(url_for("dashboard"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ── Auth routes ───────────────────────────────────────────────────────────────
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if g.username:
+        return redirect(url_for("dashboard"))
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        if auth.verify_password(username, password):
+            u = auth.get_user(username)
+            session.permanent = True
+            session["username"] = username
+            session["role"] = u["role"]
+            next_url = request.args.get("next") or url_for("dashboard")
+            return redirect(next_url)
+        error = "Invalid username or password."
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.route("/profile", methods=["GET", "POST"])
+@login_required
+def profile():
+    notice = None
+    if request.method == "POST":
+        current = request.form.get("current", "")
+        new_pw = request.form.get("password", "")
+        confirm = request.form.get("confirm", "")
+        if not auth.verify_password(g.username, current):
+            notice = ("danger", "Current password is incorrect.")
+        elif new_pw != confirm:
+            notice = ("danger", "New passwords do not match.")
+        elif len(new_pw) < 8:
+            notice = ("danger", "Password must be at least 8 characters.")
+        else:
+            auth.set_password(g.username, new_pw)
+            notice = ("success", "Password updated successfully.")
+    return render_template("profile.html", notice=notice)
+
+
+# ── Admin routes ──────────────────────────────────────────────────────────────
+
+@app.route("/admin")
+@admin_required
+def admin_panel():
+    users = auth.load_users()
+    user_summaries = []
+    for u in users:
+        try:
+            data = pf.load_portfolio(u["username"])
+            holdings_count = len(data["holdings"])
+            cash = data["cash"]
+        except Exception:
+            holdings_count = 0
+            cash = 0.0
+        user_summaries.append({**u, "holdings_count": holdings_count, "cash": cash})
+    return render_template("admin.html", users=user_summaries)
+
+
+@app.route("/admin/add-user", methods=["POST"])
+@admin_required
+def admin_add_user():
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "").strip()
+    email = request.form.get("email", "").strip()
+    role = request.form.get("role", "user")
+    starting_cash = request.form.get("starting_cash", "1000")
+
+    if not username or not password:
+        flash("Username and password are required.", "danger")
+        return redirect(url_for("admin_panel"))
+
+    ok, msg = auth.create_user(username, password, role=role, email=email)
+    if ok:
+        try:
+            cash = float(starting_cash)
+        except ValueError:
+            cash = 1000.0
+        pf.save_portfolio({"holdings": [], "cash": cash}, username)
+        flash(msg, "success")
+    else:
+        flash(msg, "danger")
+    return redirect(url_for("admin_panel"))
+
+
+@app.route("/admin/reset-password", methods=["POST"])
+@admin_required
+def admin_reset_password():
+    username = request.form.get("username", "").strip()
+    new_pw = request.form.get("new_password", "").strip()
+    if not username or not new_pw:
+        flash("Username and new password are required.", "danger")
+        return redirect(url_for("admin_panel"))
+    if auth.set_password(username, new_pw):
+        flash(f'Password reset for "{username}".', "success")
+    else:
+        flash(f'User "{username}" not found.', "danger")
+    return redirect(url_for("admin_panel"))
+
+
+@app.route("/admin/delete-user", methods=["POST"])
+@admin_required
+def admin_delete_user():
+    username = request.form.get("username", "").strip()
+    if username == g.username:
+        flash("You cannot delete your own account.", "danger")
+        return redirect(url_for("admin_panel"))
+    auth.delete_user(username)
+    flash(f'User "{username}" deleted.', "success")
+    return redirect(url_for("admin_panel"))
+
+
+@app.route("/admin/set-role", methods=["POST"])
+@admin_required
+def admin_set_role():
+    username = request.form.get("username", "").strip()
+    role = request.form.get("role", "user")
+    if username == g.username:
+        flash("You cannot change your own role.", "danger")
+        return redirect(url_for("admin_panel"))
+    users = auth.load_users()
+    for u in users:
+        if u["username"] == username:
+            u["role"] = role
+            auth.save_users(users)
+            flash(f'Role for "{username}" set to {role}.', "success")
+            return redirect(url_for("admin_panel"))
+    flash(f'User "{username}" not found.', "danger")
+    return redirect(url_for("admin_panel"))
+
+
+# ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @app.route("/")
+@login_required
 def dashboard():
-    from portfolio import portfolio_summary
-    summary = portfolio_summary()
+    summary = pf.portfolio_summary(g.username)
     config = load_config()
     return render_template("dashboard.html", summary=summary, config=config)
 
 
+# ── Portfolio ─────────────────────────────────────────────────────────────────
+
 @app.route("/portfolio")
+@login_required
 def portfolio_page():
-    from portfolio import portfolio_summary, load_portfolio
-    summary = portfolio_summary()
-    raw = load_portfolio()
+    summary = pf.portfolio_summary(g.username)
+    raw = pf.load_portfolio(g.username)
     return render_template("portfolio.html", summary=summary, cash=raw["cash"])
 
 
 @app.route("/portfolio/add", methods=["POST"])
+@login_required
 def portfolio_add_route():
-    from portfolio import portfolio_add
     ticker = request.form.get("ticker", "").strip()
     shares = request.form.get("shares", "").strip()
     price = request.form.get("price", "").strip()
@@ -65,54 +244,55 @@ def portfolio_add_route():
     if not ticker or not shares or not price:
         flash("All fields (ticker, shares, price) are required.", "danger")
         return redirect(url_for("portfolio_page"))
-
     try:
-        success, msg = portfolio_add(ticker, float(shares), float(price), buy_date)
-        flash(msg, "success" if success else "danger")
+        ok, msg = pf.portfolio_add(ticker, float(shares), float(price), buy_date, g.username)
+        flash(msg, "success" if ok else "danger")
     except Exception as e:
         flash(f"Error: {e}", "danger")
     return redirect(url_for("portfolio_page"))
 
 
 @app.route("/portfolio/sell", methods=["POST"])
+@login_required
 def portfolio_sell_route():
-    from portfolio import portfolio_remove
     ticker = request.form.get("ticker", "").strip()
     if not ticker:
         flash("Ticker is required.", "danger")
         return redirect(url_for("portfolio_page"))
-    success, msg = portfolio_remove(ticker)
-    flash(msg, "success" if success else "danger")
+    ok, msg = pf.portfolio_remove(ticker, g.username)
+    flash(msg, "success" if ok else "danger")
     return redirect(url_for("portfolio_page"))
 
 
 @app.route("/portfolio/set-cash", methods=["POST"])
+@login_required
 def portfolio_set_cash_route():
-    from portfolio import set_cash
     amount = request.form.get("amount", "").strip()
     if not amount:
         flash("Amount is required.", "danger")
         return redirect(url_for("portfolio_page"))
     try:
-        success, msg = set_cash(float(amount))
+        ok, msg = pf.set_cash(float(amount), g.username)
         flash(msg, "success")
     except Exception as e:
         flash(f"Error: {e}", "danger")
     return redirect(url_for("portfolio_page"))
 
 
-# ── Screener ─────────────────────────────────────────────────────────────────
+# ── Screener (shared — market data is the same for all users) ─────────────────
 
 screener_results = {"status": "idle", "data": None, "error": None}
 screener_lock = threading.Lock()
 
 
 @app.route("/screener")
+@login_required
 def screener_page():
     return render_template("screener.html", config=load_config())
 
 
 @app.route("/api/screener/run", methods=["POST"])
+@login_required
 def screener_run():
     global screener_results
     with screener_lock:
@@ -139,6 +319,7 @@ def screener_run():
 
 
 @app.route("/api/screener/status")
+@login_required
 def screener_status():
     with screener_lock:
         return jsonify(screener_results)
@@ -147,11 +328,13 @@ def screener_status():
 # ── Sentiment ─────────────────────────────────────────────────────────────────
 
 @app.route("/sentiment")
+@login_required
 def sentiment_page():
     return render_template("sentiment.html")
 
 
 @app.route("/api/sentiment", methods=["POST"])
+@login_required
 def sentiment_api():
     ticker = request.json.get("ticker", "").strip()
     if not ticker:
@@ -160,54 +343,59 @@ def sentiment_api():
     return jsonify(analyze_sentiment(ticker))
 
 
-# ── Recommendations ───────────────────────────────────────────────────────────
+# ── Recommendations (per-user — portfolio differs by user) ────────────────────
 
-recommend_results = {"status": "idle", "data": None, "error": None}
+recommend_results = {}   # username -> {status, data, error}
 recommend_lock = threading.Lock()
 
 
 @app.route("/recommendations")
+@login_required
 def recommendations_page():
     return render_template("recommendations.html", config=load_config())
 
 
 @app.route("/api/recommendations/run", methods=["POST"])
+@login_required
 def recommendations_run():
-    global recommend_results
+    username = g.username
     with recommend_lock:
-        if recommend_results["status"] == "running":
+        if recommend_results.get(username, {}).get("status") == "running":
             return jsonify({"status": "already_running"})
-        recommend_results = {"status": "running", "data": None, "error": None}
+        recommend_results[username] = {"status": "running", "data": None, "error": None}
 
-    def _run():
-        global recommend_results
+    def _run(uname):
         try:
             from recommender import run_recommendations
-            results = run_recommendations()
+            results = run_recommendations(uname)
             with recommend_lock:
-                recommend_results = {"status": "done", "data": results, "error": None}
+                recommend_results[uname] = {"status": "done", "data": results, "error": None}
         except Exception as e:
             with recommend_lock:
-                recommend_results = {"status": "error", "data": None, "error": str(e)}
+                recommend_results[uname] = {"status": "error", "data": None, "error": str(e)}
 
-    threading.Thread(target=_run, daemon=True).start()
+    threading.Thread(target=_run, args=(username,), daemon=True).start()
     return jsonify({"status": "started"})
 
 
 @app.route("/api/recommendations/status")
+@login_required
 def recommendations_status():
+    username = g.username
     with recommend_lock:
-        return jsonify(recommend_results)
+        return jsonify(recommend_results.get(username, {"status": "idle", "data": None, "error": None}))
 
 
 # ── Settings ──────────────────────────────────────────────────────────────────
 
 @app.route("/settings")
+@login_required
 def settings_page():
     return render_template("settings.html", config=load_config())
 
 
 @app.route("/settings/save", methods=["POST"])
+@login_required
 def settings_save():
     try:
         config = {

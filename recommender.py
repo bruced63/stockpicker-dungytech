@@ -1,4 +1,4 @@
-# recommender.py — Buy/Sell recommendation logic for StockPicker Web
+# recommender.py — Buy/Sell recommendation logic for StockPicker
 
 import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -21,7 +21,6 @@ def load_config():
 
 
 def _fetch_sentiments(tickers, max_workers=8):
-    """Fetch sentiment scores for multiple tickers in parallel."""
     if not tickers:
         return {}
     results = {}
@@ -36,13 +35,13 @@ def _fetch_sentiments(tickers, max_workers=8):
     return results
 
 
-def run_recommendations():
-    """Generate recommendations. Returns dict with sell_signals and buy_candidates."""
+def run_recommendations(username="default"):
+    """Generate recommendations for a specific user's portfolio."""
     config = load_config()
     stop_loss_pct = config["stop_loss_pct"]
     max_price = config["max_price"]
 
-    portfolio = load_portfolio()
+    portfolio = load_portfolio(username)
     holdings = portfolio["holdings"]
     holding_tickers = [h["ticker"] for h in holdings]
 
@@ -50,8 +49,8 @@ def run_recommendations():
     all_tickers = list(set(ALL_TICKERS + holding_tickers))
     hist_map = batch_download(all_tickers, period="1y")
 
-    # ── Analyse holdings for SELL signals (technicals only, no network calls) ──
-    pending_sell = []  # (holding_dict, current_price, rsi)
+    # ── Analyse holdings (technicals from batch data, no extra network calls) ──
+    pending_sell = []
     for h in holdings:
         ticker = h["ticker"]
         hist = hist_map.get(ticker)
@@ -62,8 +61,8 @@ def run_recommendations():
         rsi = float(rsi_series.iloc[-1]) if not rsi_series.empty else None
         pending_sell.append((h, current_price, rsi))
 
-    # ── Score all BUY candidates from batch data (no network calls) ──
-    pending_buy = []  # (ticker, price, score, signals, rsi_val)
+    # ── Score all BUY candidates from batch data ──
+    pending_buy = []
     for ticker in ALL_TICKERS:
         hist = hist_map.get(ticker)
         if hist is None or len(hist) < 50:
@@ -78,7 +77,7 @@ def run_recommendations():
         except Exception:
             continue
 
-    # ── Fetch all sentiment in parallel (one round-trip per ticker, concurrent) ──
+    # ── Fetch all sentiment in parallel ──
     sentiment_tickers = list({t for t, *_ in pending_buy} | set(holding_tickers))
     sentiment_map = _fetch_sentiments(sentiment_tickers)
 

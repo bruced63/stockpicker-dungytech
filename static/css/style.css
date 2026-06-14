@@ -1,4 +1,37 @@
-/* StockPicker Web — Custom Styles */
+/* StockPicker — Dungy Tech Solutions, LLC */
+
+/* DTS brand badge in navbar */
+.dts-badge {
+    background: #1a6ed8;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    padding: 3px 7px;
+    border-radius: 6px;
+}
+
+/* Auth card (login / profile) */
+.auth-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 40px 36px;
+    width: 100%;
+    max-width: 400px;
+}
+.auth-logo-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 24px;
+}
+.auth-brand {
+    font-size: 17px;
+    font-weight: 700;
+    color: #e6edf3;
+}
+.auth-brand span { color: #1a6ed8; }
 
 body {
     min-height: 100vh;
