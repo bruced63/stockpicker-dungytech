@@ -1,6 +1,4 @@
-"""
-screener.py — Stock screening logic for StockPicker Web
-"""
+# screener.py — Stock screening logic for StockPicker Web
 
 import yfinance as yf
 import pandas as pd
@@ -26,16 +24,36 @@ NASDAQ100_SAMPLE = [
 ALL_TICKERS = list(set(SP500_SAMPLE + NASDAQ100_SAMPLE))
 
 
+def batch_download(tickers, period="1y"):
+    """Fetch history for multiple tickers in a single HTTP request.
+    Returns {ticker: DataFrame}."""
+    if not tickers:
+        return {}
+    tickers = list(tickers)
+    raw = yf.download(
+        tickers, period=period, group_by="ticker",
+        auto_adjust=True, progress=False, threads=True
+    )
+    multi = len(tickers) > 1
+    out = {}
+    for t in tickers:
+        try:
+            df = raw[t].dropna(how="all") if multi else raw.dropna(how="all")
+            if not df.empty:
+                out[t] = df
+        except Exception:
+            pass
+    return out
+
+
 def calculate_rsi(prices, period=14):
-    """Calculate RSI for a price series."""
     delta = prices.diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
     avg_gain = gain.rolling(window=period, min_periods=period).mean()
     avg_loss = loss.rolling(window=period, min_periods=period).mean()
     rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
+    return 100 - (100 / (1 + rs))
 
 
 def score_stock(data, info=None):
@@ -94,7 +112,7 @@ def score_stock(data, info=None):
             score += 5
             signals.append("Price below 50MA (potential rebound)")
 
-        # Volume Spike
+        # Volume spike
         vol_30d_avg = float(volume.tail(30).mean())
         vol_today = float(volume.iloc[-1])
         vol_ratio = vol_today / vol_30d_avg if vol_30d_avg > 0 else 1.0
@@ -132,22 +150,17 @@ def score_stock(data, info=None):
 
 def run_screener(max_price=100, top_n=10):
     """Run the stock screener. Returns list of result dicts."""
+    hist_map = batch_download(ALL_TICKERS, period="1y")
+
     results = []
-
-    for ticker in ALL_TICKERS:
+    for ticker, hist in hist_map.items():
         try:
-            t = yf.Ticker(ticker)
-            hist = t.history(period="1y")
-
-            if hist.empty or len(hist) < 30:
+            if len(hist) < 30:
                 continue
-
             current_price = float(hist['Close'].iloc[-1])
             if current_price > max_price:
                 continue
-
             score, signals, rsi_value = score_stock(hist)
-
             results.append({
                 "ticker": ticker,
                 "price": round(current_price, 2),
