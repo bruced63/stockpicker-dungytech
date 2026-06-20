@@ -124,7 +124,7 @@ function showRecResults(data) {
             const sentCls = s.sentiment > 0.05 ? 'text-success' : s.sentiment < -0.05 ? 'text-danger' : 'text-warning';
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><strong class="text-primary">${s.ticker}</strong></td>
+                <td><strong class="text-primary ticker-popover" data-ticker="${s.ticker}">${s.ticker}</strong></td>
                 <td class="text-end">$${s.buy_price.toFixed(2)}</td>
                 <td class="text-end">$${s.current_price.toFixed(2)}</td>
                 <td class="text-end ${changeCls}">${s.change_pct >= 0 ? '+' : ''}${s.change_pct.toFixed(1)}%</td>
@@ -138,6 +138,7 @@ function showRecResults(data) {
             `;
             sellBody.appendChild(tr);
         });
+        initTickerPopovers(sellBody);
     }
 
     // Buy candidates
@@ -153,7 +154,7 @@ function showRecResults(data) {
             const sentCls = b.sentiment > 0.05 ? 'text-success' : b.sentiment < -0.05 ? 'text-danger' : 'text-warning';
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><strong class="text-primary">${b.ticker}</strong></td>
+                <td><strong class="text-primary ticker-popover" data-ticker="${b.ticker}">${b.ticker}</strong></td>
                 <td class="text-end">$${b.price.toFixed(2)}</td>
                 <td>
                     <div class="progress" style="height: 20px; min-width: 60px;">
@@ -169,6 +170,7 @@ function showRecResults(data) {
             `;
             buyBody.appendChild(tr);
         });
+        initTickerPopovers(buyBody);
     }
 }
 </script>

@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import json
 import os
 import threading
+import time
 
 import auth
 import portfolio as pf
@@ -31,6 +32,9 @@ limiter = Limiter(get_remote_address, app=app, default_limits=[])
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(DIR, "config.json")
+COMPANY_CACHE_FILE = os.path.join(DIR, "company_cache.json")
+COMPANY_CACHE_TTL = 30 * 24 * 3600  # 30 days
+_company_cache_lock = threading.Lock()
 
 
 # ── Bootstrap ────────────────────────────────────────────────────────────────
@@ -418,6 +422,75 @@ def recommendations_status():
     username = g.username
     with recommend_lock:
         return jsonify(recommend_results.get(username, {"status": "idle", "data": None, "error": None}))
+
+
+# ── Company info (cached, for ticker hover popovers) ──
+
+def _load_company_cache():
+    if not os.path.exists(COMPANY_CACHE_FILE):
+        return {}
+    try:
+        with open(COMPANY_CACHE_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_company_cache(cache):
+    try:
+        with open(COMPANY_CACHE_FILE, "w") as f:
+            json.dump(cache, f)
+    except Exception:
+        pass
+
+
+def _truncate_summary(text, max_chars=400):
+    if not text:
+        return ""
+    text = text.strip()
+    if len(text) <= max_chars:
+        return text
+    truncated = text[:max_chars]
+    last_period = truncated.rfind(". ")
+    if last_period > max_chars * 0.5:
+        return truncated[:last_period + 1]
+    return truncated.rstrip() + "…"
+
+
+@app.route("/api/company/<ticker>")
+@login_required
+def company_info(ticker):
+    ticker = ticker.upper().strip()
+    if not ticker or not ticker.replace(".", "").replace("-", "").isalnum() or len(ticker) > 10:
+        return jsonify({"error": "Invalid ticker"}), 400
+
+    now = time.time()
+    with _company_cache_lock:
+        cache = _load_company_cache()
+        entry = cache.get(ticker)
+        if entry and (now - entry.get("ts", 0)) < COMPANY_CACHE_TTL:
+            return jsonify(entry["data"])
+
+    try:
+        import yfinance as yf
+        info = yf.Ticker(ticker).info or {}
+        data = {
+            "ticker": ticker,
+            "name": info.get("longName") or info.get("shortName") or ticker,
+            "sector": info.get("sector") or "",
+            "industry": info.get("industry") or "",
+            "summary": _truncate_summary(info.get("longBusinessSummary", "")),
+            "website": info.get("website") or "",
+        }
+    except Exception as e:
+        return jsonify({"error": str(e), "ticker": ticker}), 502
+
+    with _company_cache_lock:
+        cache = _load_company_cache()
+        cache[ticker] = {"ts": now, "data": data}
+        _save_company_cache(cache)
+
+    return jsonify(data)
 
 
 # ── Settings (admin-only — global config affects all users) ───────────────────

@@ -114,7 +114,7 @@ function showScreenerResults(results) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${i + 1}</td>
-            <td><strong class="text-primary">${r.ticker}</strong></td>
+            <td><strong class="text-primary ticker-popover" data-ticker="${r.ticker}">${r.ticker}</strong></td>
             <td class="text-end">$${r.price.toFixed(2)}</td>
             <td>
                 <div class="d-flex align-items-center gap-2">
@@ -128,6 +128,7 @@ function showScreenerResults(results) {
         `;
         body.appendChild(tr);
     });
+    initTickerPopovers(body);
 }
 </script>
 {% endblock %}

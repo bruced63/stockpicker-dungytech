@@ -75,6 +75,30 @@ body {
     border-radius: 8px;
 }
 
+/* Ticker hover popup (custom, lightweight) */
+.ticker-popover {
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+}
+.ticker-popup {
+    position: fixed;
+    z-index: 9999;
+    max-width: 340px;
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 8px;
+    padding: 10px 12px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+    pointer-events: auto;
+}
+.ticker-popup-header {
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 6px;
+    color: var(--bs-primary);
+}
+
 /* Light theme adjustments */
 [data-bs-theme="light"] .table .progress {
     background-color: rgba(0,0,0,0.08);

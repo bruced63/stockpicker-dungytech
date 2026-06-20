@@ -67,7 +67,7 @@
                 <tbody>
                     {% for h in summary.holdings %}
                     <tr>
-                        <td><strong class="text-primary">{{ h.ticker }}</strong></td>
+                        <td><strong class="text-primary ticker-popover" data-ticker="{{ h.ticker }}">{{ h.ticker }}</strong></td>
                         <td class="text-end">{{ "%.2f"|format(h.shares) }}</td>
                         <td class="text-end">${{ "%.2f"|format(h.buy_price) }}</td>
                         <td class="text-end">
