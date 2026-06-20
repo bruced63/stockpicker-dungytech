@@ -6,3 +6,4 @@ portfolios/
 config.json
 users.json
 *.log
+company_cache.json
